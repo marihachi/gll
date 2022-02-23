@@ -27,7 +27,7 @@ export class ParserStream<T> {
 	private ctx: ParserContext<T>;
 	private handler: ParserHandler<T>;
 	public done: boolean;
-	public result: Result<T> | undefined;
+	private result: Result<T> | undefined;
 
 	constructor(handler: ParserHandler<T>) {
 		this.done = false;
@@ -106,9 +106,9 @@ export function choice<T extends Parser<any>>(parsers: T[]): Parser<InferParserR
 		}
 		return new ParserStream((ctx) => {
 			for(const stream of streams) {
-				stream.next();
-				if (stream.done && stream.result != null) {
-					const match = stream.result;
+				const streamResult = stream.next();
+				if (streamResult.done) {
+					const match = streamResult.value;
 					if (match.ok) {
 						return ctx.success(match.result, match.remaining);
 					}
@@ -130,12 +130,13 @@ export function sequence<T extends Parser<any>[]>(parsers: [...T]): Parser<Infer
 		let index = 0;
 		let stream = parsers[0](input);
 		return new ParserStream((ctx) => {
-			stream.next();
-			if (!stream.done) return;
-			if (stream.result == null || !stream.result.ok) {
+			let match;
+			const streamResult = stream.next();
+			if (!streamResult.done) return;
+			match = streamResult.value;
+			if (!match.ok) {
 				return ctx.failure();
 			}
-			const match = stream.result;
 			result.push(match.result);
 			remaining = match.remaining;
 			index++;
