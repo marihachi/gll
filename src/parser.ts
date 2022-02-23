@@ -1,18 +1,10 @@
-// parser result
+// parser
 
 export type Success<T> = {
 	ok: true;
 	result: T;
 	remaining: string;
 };
-
-function success<T>(result: T, remaining: string): Success<T> {
-	return {
-		ok: true,
-		result: result,
-		remaining: remaining,
-	};
-}
 
 export type Failure = {
 	ok: false;
@@ -24,23 +16,29 @@ const failure: Failure = {
 
 export type Result<T> = Success<T> | Failure;
 
-// parser stream
+export type ParserContext<T> = {
+	success: (result: T, remaining: string) => void;
+	failure: () => void;
+};
 
-export class ParserStream<T> implements IterableIterator<Result<T> | undefined> {
-	private ctx: {
-		success: (result: T, remaining: string) => void;
-		failure: () => void;
-	};
-	private handler: (ctx: ParserStream<T>['ctx']) => void;
+export type ParserHandler<T> = (ctx: ParserContext<T>) => void;
+
+export class ParserStream<T> {
+	private ctx: ParserContext<T>;
+	private handler: ParserHandler<T>;
 	public done: boolean;
 	public result: Result<T> | undefined;
 
-	constructor(handler: ParserStream<T>['handler']) {
+	constructor(handler: ParserHandler<T>) {
 		this.done = false;
 		this.ctx = {
 			success: (result: T, remaining: string) => {
 				this.done = true;
-				this.result = success(result, remaining);
+				this.result = {
+					ok: true,
+					result: result,
+					remaining: remaining,
+				};
 			},
 			failure: () => {
 				this.done = true;
@@ -65,8 +63,6 @@ export class ParserStream<T> implements IterableIterator<Result<T> | undefined> 
 		return this;
 	}
 }
-
-// parser
 
 export type Parser<T> = (input: string) => ParserStream<T>;
 
