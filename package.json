@@ -6,7 +6,8 @@
   "main": "./built/index.js",
   "types": "./built/index.d.ts",
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "start": "node ."
   },
   "repository": {
     "type": "git",
