@@ -10,13 +10,13 @@ function app() {
 	let input = '12345';
 	while (true) {
 		const task = parser(input);
-		let result;
 
+		let result;
 		do {
 			result = task.step();
 			console.log('step', result.done, result.value);
 		} while (!result.done);
-		
+
 		if (!result.value.ok) break;
 		input = result.value.remaining;
 	}

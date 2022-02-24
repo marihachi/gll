@@ -16,52 +16,48 @@ const failure: Failure = {
 
 export type Result<T> = Success<T> | Failure;
 
-export type ParserContext<T> = {
-	success: (result: T, remaining: string) => void;
-	failure: () => void;
-};
+export type ParserSuccess<T> = (result: T, remaining: string) => void;
 
-export type ParserHandler<T> = (ctx: ParserContext<T>) => void;
+export type ParserFailure = () => void;
+
+export type ParserHandler<T> = (success: ParserSuccess<T>, failure: ParserFailure) => void;
 
 export type StepResult<T> = {
 	done?: false;
 	value: undefined;
 } | {
 	done: true;
-	value: Result<T>;
+	value: T;
 };
 
 export class ParserTask<T> {
-	private ctx: ParserContext<T>;
-	private handler: ParserHandler<T>;
+	private handler: () => void;
 	public done: boolean;
-	private result?: Result<T>;
+	public match?: Result<T>;
 
 	constructor(handler: ParserHandler<T>) {
 		this.done = false;
-		this.ctx = {
-			success: (result: T, remaining: string) => {
-				this.done = true;
-				this.result = {
-					ok: true,
-					result: result,
-					remaining: remaining,
-				};
-			},
-			failure: () => {
-				this.done = true;
-				this.result = failure;
-			}
+		const successFn = (result: T, remaining: string) => {
+			this.done = true;
+			this.match = {
+				ok: true,
+				result: result,
+				remaining: remaining,
+			};
 		};
-		this.handler = handler;
+		const failureFn = () => {
+			this.done = true;
+			this.match = failure;
+		};
+		this.handler = () => handler(successFn, failureFn);
 	}
 
-	public step(): StepResult<T> {
+	public step(): StepResult<Result<T>> {
 		if (!this.done) {
-			this.handler(this.ctx);
+			this.handler();
 		}
 		if (this.done) {
-			return { done: true, value: this.result! };
+			return { done: true, value: this.match! };
 		} else {
 			return { done: false, value: undefined };
 		}
@@ -78,25 +74,25 @@ export type InferParserResults<T> = T extends [infer U, ...infer V] ? [InferPars
 
 export function str(value: string): Parser<string> {
 	return (input) => {
-		return new ParserTask((ctx) => {
+		return new ParserTask((success, failure) => {
 			if (input.startsWith(value)) {
 				const remaining = input.substr(value.length);
-				return ctx.success(value, remaining);
+				return success(value, remaining);
 			}
-			return ctx.failure();
+			return failure();
 		});
 	};
 }
 
 export function regex(pattern: RegExp): Parser<RegExpExecArray> {
 	return (input) => {
-		return new ParserTask((ctx) => {
+		return new ParserTask((success, failure) => {
 			const match = pattern.exec(input);
 			if (match == null) {
-				return ctx.failure();
+				return failure();
 			}
 			const remaining = input.substr(match[0].length);
-			return ctx.success(match, remaining);
+			return success(match, remaining);
 		});
 	};
 }
@@ -108,18 +104,18 @@ export function choice<T extends Parser<any>>(parsers: T[]): Parser<InferParserR
 		for (const parser of parsers) {
 			tasks.push(parser(input));
 		}
-		return new ParserTask((ctx) => {
+		return new ParserTask((success, failure) => {
 			for(const task of tasks) {
 				const stepResult = task.step();
 				if (stepResult.done) {
 					const match = stepResult.value;
 					if (match.ok) {
-						return ctx.success(match.result, match.remaining);
+						return success(match.result, match.remaining);
 					}
 				}
 			}
 			if (tasks.every(t => t.done)) {
-				return ctx.failure();
+				return failure();
 			}
 		});
 	};
@@ -133,19 +129,19 @@ export function sequence<T extends Parser<any>[]>(parsers: [...T]): Parser<Infer
 		let remaining = input;
 		let index = 0;
 		let task = parsers[0](input);
-		return new ParserTask((ctx) => {
+		return new ParserTask((success, failure) => {
 			let match;
 			const stepResult = task.step();
 			if (!stepResult.done) return;
 			match = stepResult.value;
 			if (!match.ok) {
-				return ctx.failure();
+				return failure();
 			}
 			result.push(match.result);
 			remaining = match.remaining;
 			index++;
 			if (index >= parsers.length) {
-				return ctx.success((result as any), remaining);
+				return success((result as any), remaining);
 			}
 			task = parsers[index](remaining);
 		});
