@@ -1,0 +1,24 @@
+{
+  "private": true,
+  "name": "gll",
+  "version": "0.0.0",
+  "description": "An experiment of the Generalized LL (GLL) parser with TypeScript.",
+  "main": "./built/index.js",
+  "types": "./built/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/marihachi/gll.git"
+  },
+  "author": "Marihachi",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "15.12.4",
+    "typescript": "4.3.4"
+  },
+  "files": [
+    "built"
+  ]
+}
