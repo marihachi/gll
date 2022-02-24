@@ -23,11 +23,19 @@ export type ParserContext<T> = {
 
 export type ParserHandler<T> = (ctx: ParserContext<T>) => void;
 
-export class ParserStream<T> {
+export type StepResult<T> = {
+	done?: false;
+	value: undefined;
+} | {
+	done: true;
+	value: Result<T>;
+};
+
+export class ParserTask<T> {
 	private ctx: ParserContext<T>;
 	private handler: ParserHandler<T>;
 	public done: boolean;
-	private result: Result<T> | undefined;
+	private result?: Result<T>;
 
 	constructor(handler: ParserHandler<T>) {
 		this.done = false;
@@ -48,7 +56,7 @@ export class ParserStream<T> {
 		this.handler = handler;
 	}
 
-	public next(): IteratorResult<undefined, Result<T>> {
+	public step(): StepResult<T> {
 		if (!this.done) {
 			this.handler(this.ctx);
 		}
@@ -58,13 +66,9 @@ export class ParserStream<T> {
 			return { done: false, value: undefined };
 		}
 	}
-
-	public [Symbol.iterator]() {
-		return this;
-	}
 }
 
-export type Parser<T> = (input: string) => ParserStream<T>;
+export type Parser<T> = (input: string) => ParserTask<T>;
 
 export type InferParserResult<T> = T extends Parser<infer U> ? U : never;
 
@@ -74,7 +78,7 @@ export type InferParserResults<T> = T extends [infer U, ...infer V] ? [InferPars
 
 export function str(value: string): Parser<string> {
 	return (input) => {
-		return new ParserStream((ctx) => {
+		return new ParserTask((ctx) => {
 			if (input.startsWith(value)) {
 				const remaining = input.substr(value.length);
 				return ctx.success(value, remaining);
@@ -86,7 +90,7 @@ export function str(value: string): Parser<string> {
 
 export function regex(pattern: RegExp): Parser<RegExpExecArray> {
 	return (input) => {
-		return new ParserStream((ctx) => {
+		return new ParserTask((ctx) => {
 			const match = pattern.exec(input);
 			if (match == null) {
 				return ctx.failure();
@@ -100,21 +104,21 @@ export function regex(pattern: RegExp): Parser<RegExpExecArray> {
 // NOTE: Tの制約が思いつくまでは`Parser<any>`
 export function choice<T extends Parser<any>>(parsers: T[]): Parser<InferParserResult<T>> {
 	return (input) => {
-		const streams: ParserStream<InferParserResult<T>>[] = [];
+		const tasks: ParserTask<InferParserResult<T>>[] = [];
 		for (const parser of parsers) {
-			streams.push(parser(input));
+			tasks.push(parser(input));
 		}
-		return new ParserStream((ctx) => {
-			for(const stream of streams) {
-				const streamResult = stream.next();
-				if (streamResult.done) {
-					const match = streamResult.value;
+		return new ParserTask((ctx) => {
+			for(const task of tasks) {
+				const stepResult = task.step();
+				if (stepResult.done) {
+					const match = stepResult.value;
 					if (match.ok) {
 						return ctx.success(match.result, match.remaining);
 					}
 				}
 			}
-			if (streams.every(t => t.done)) {
+			if (tasks.every(t => t.done)) {
 				return ctx.failure();
 			}
 		});
@@ -128,12 +132,12 @@ export function sequence<T extends Parser<any>[]>(parsers: [...T]): Parser<Infer
 		const result: any[] = [];
 		let remaining = input;
 		let index = 0;
-		let stream = parsers[0](input);
-		return new ParserStream((ctx) => {
+		let task = parsers[0](input);
+		return new ParserTask((ctx) => {
 			let match;
-			const streamResult = stream.next();
-			if (!streamResult.done) return;
-			match = streamResult.value;
+			const stepResult = task.step();
+			if (!stepResult.done) return;
+			match = stepResult.value;
 			if (!match.ok) {
 				return ctx.failure();
 			}
@@ -143,7 +147,7 @@ export function sequence<T extends Parser<any>[]>(parsers: [...T]): Parser<Infer
 			if (index >= parsers.length) {
 				return ctx.success((result as any), remaining);
 			}
-			stream = parsers[index](remaining);
+			task = parsers[index](remaining);
 		});
 	};
 }
