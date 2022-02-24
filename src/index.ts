@@ -1,15 +1,24 @@
-import { sequence, str } from './parser';
+import { choice, sequence, str } from './parser';
 
 function app() {
-	const parser = sequence([str('1'), str('2')]);
+	const parser = choice([
+		sequence([str('1'), str('2')]),
+		sequence([str('3'), str('4')]),
+		sequence([str('5'), str('6')]),
+	]);
 
-	const input = '123';
-	const task = parser(input);
+	let input = '12345';
+	while (true) {
+		const task = parser(input);
+		let result;
 
-	let result;
-	do {
-		result = task.step();
-		console.log(result.done, result.value);
-	} while (!result.done);
+		do {
+			result = task.step();
+			console.log('step', result.done, result.value);
+		} while (!result.done);
+		
+		if (!result.value.ok) break;
+		input = result.value.remaining;
+	}
 }
 app();
