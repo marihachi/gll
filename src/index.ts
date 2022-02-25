@@ -14,7 +14,11 @@ function app() {
 		let result;
 		do {
 			result = task.step();
-			console.log('step', result.done, result.value);
+			if (result.done) {
+				console.log('done', result.value);
+			} else {
+				console.log('pending');
+			}
 		} while (!result.done);
 
 		if (!result.value.ok) break;

@@ -23,8 +23,7 @@ export type ParserFailure = () => void;
 export type ParserHandler<T> = (success: ParserSuccess<T>, failure: ParserFailure) => void;
 
 export type StepResult<T> = {
-	done?: false;
-	value: undefined;
+	done: false;
 } | {
 	done: true;
 	value: T;
@@ -59,7 +58,7 @@ export class ParserTask<T> {
 		if (this.done) {
 			return { done: true, value: this.match! };
 		} else {
-			return { done: false, value: undefined };
+			return { done: false };
 		}
 	}
 }
