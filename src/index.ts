@@ -21,8 +21,9 @@ function app() {
 			}
 		} while (!result.done);
 
-		if (!result.value.ok) break;
-		input = result.value.remaining;
+		const match = result.value;
+		if (!match.success) break;
+		input = match.remaining;
 	}
 }
 app();

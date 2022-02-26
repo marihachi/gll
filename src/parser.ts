@@ -3,17 +3,17 @@ import { isGeneratorFunction } from 'util/types';
 // parser
 
 export type Success<T> = {
-	ok: true;
+	success: true;
 	result: T;
 	remaining: string;
 };
 
 export type Failure = {
-	ok: false;
+	success: false;
 };
 
 const failure: Failure = {
-	ok: false,
+	success: false,
 };
 
 export type Result<T> = Success<T> | Failure;
@@ -35,21 +35,21 @@ export type StepResult<T> = {
 
 export class ParserTask<T> {
 	private handler: () => void;
-	public done: boolean;
-	public match?: Result<T>;
+	private ok: boolean;
+	private match?: Result<T>;
 
 	constructor(handler: ParserHandler<T> | ParserGenHandler<T>) {
-		this.done = false;
+		this.ok = false;
 		const successFn = (result: T, remaining: string) => {
-			this.done = true;
+			this.ok = true;
 			this.match = {
-				ok: true,
+				success: true,
 				result: result,
 				remaining: remaining,
 			};
 		};
 		const failureFn = () => {
-			this.done = true;
+			this.ok = true;
 			this.match = failure;
 		};
 		if (isGeneratorFunction(handler)) {
@@ -60,11 +60,15 @@ export class ParserTask<T> {
 		}
 	}
 
+	public get done(): boolean {
+		return this.ok;
+	}
+
 	public step(): StepResult<Result<T>> {
-		if (!this.done) {
+		if (!this.ok) {
 			this.handler();
 		}
-		if (this.done) {
+		if (this.ok) {
 			return { done: true, value: this.match! };
 		} else {
 			return { done: false };
@@ -118,7 +122,7 @@ export function choice<T extends Parser<any>>(parsers: T[]): Parser<InferParserR
 					const stepResult = task.step();
 					if (stepResult.done) {
 						const match = stepResult.value;
-						if (match.ok) {
+						if (match.success) {
 							return success(match.result, match.remaining);
 						}
 					}
@@ -146,7 +150,7 @@ export function sequence<T extends Parser<any>[]>(parsers: [...T]): Parser<Infer
 					stepResult = task.step();
 					if (stepResult.done) {
 						const match = stepResult.value;
-						if (!match.ok) {
+						if (!match.success) {
 							return failure();
 						}
 						result.push(match.result);
