@@ -9,19 +9,19 @@ function app() {
 
 	let input = '12345';
 	while (true) {
-		const task = parser(input);
+		const task = parser.parse(input);
 
-		let result;
+		let done;
 		do {
-			result = task.step();
-			if (result.done) {
-				console.log('done', result.value);
+			done = task.step();
+			if (done) {
+				console.log('done', task.result);
 			} else {
 				console.log('pending');
 			}
-		} while (!result.done);
+		} while (!done);
 
-		const match = result.value;
+		const match = task.result!;
 		if (!match.success) break;
 		input = match.remaining;
 	}
