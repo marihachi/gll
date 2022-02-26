@@ -1,5 +1,3 @@
-import { isGeneratorFunction } from 'util/types';
-
 // parser
 
 export type Success<T> = {
@@ -24,8 +22,6 @@ export type ParserFailure = () => void;
 
 export type ParserHandler<T> = (success: ParserSuccess<T>, failure: ParserFailure) => void;
 
-export type ParserGenHandler<T> = (success: ParserSuccess<T>, failure: ParserFailure) => Generator;
-
 export type StepResult<T> = {
 	done: false;
 } | {
@@ -38,7 +34,7 @@ export class ParserTask<T> {
 	private ok: boolean;
 	private match?: Result<T>;
 
-	constructor(handler: ParserHandler<T> | ParserGenHandler<T>) {
+	constructor(handler: ParserHandler<T>) {
 		this.ok = false;
 		const successFn = (result: T, remaining: string) => {
 			this.ok = true;
@@ -52,12 +48,7 @@ export class ParserTask<T> {
 			this.ok = true;
 			this.match = failure;
 		};
-		if (isGeneratorFunction(handler)) {
-			const gen = (handler as ParserGenHandler<T>)(successFn, failureFn);
-			this.handler = () => { gen.next(); };
-		} else {
-			this.handler = () => { handler(successFn, failureFn); };
-		}
+		this.handler = () => { handler(successFn, failureFn); };
 	}
 
 	public get done(): boolean {
@@ -116,22 +107,22 @@ export function choice<T extends Parser<any>>(parsers: T[]): Parser<InferParserR
 		for (const parser of parsers) {
 			tasks.push(parser(input));
 		}
-		return new ParserTask(function* (success, failure) {
-			while (true) {
-				for(const task of tasks) {
-					const stepResult = task.step();
-					if (stepResult.done) {
-						const match = stepResult.value;
-						if (match.success) {
-							return success(match.result, match.remaining);
-						}
+		return new ParserTask((success, failure) => {
+			for(const task of tasks) {
+				const stepResult = task.step();
+				if (stepResult.done) {
+					const match = stepResult.value;
+					if (match.success) {
+						//console.log('[choice] success');
+						return success(match.result, match.remaining);
 					}
 				}
-				if (tasks.every(t => t.done)) {
-					return failure();
-				}
-				yield;
 			}
+			if (tasks.every(t => t.done)) {
+				//console.log('[choice] failure');
+				return failure();
+			}
+			//console.log('[choice] pending');
 		});
 	};
 }
@@ -140,30 +131,30 @@ export function choice<T extends Parser<any>>(parsers: T[]): Parser<InferParserR
 // NOTE: resultの型が思いつくまでは`any`
 export function sequence<T extends Parser<any>[]>(parsers: [...T]): Parser<InferParserResults<T>> {
 	return (input: string) => {
-		return new ParserTask(function* (success, failure) {
-			const result: any[] = [];
-			let remaining = input;
-			for (let i = 0; i < parsers.length; i++) {
-				const task = parsers[i](remaining);
-				let stepResult;
-				while (true) {
-					stepResult = task.step();
-					if (stepResult.done) {
-						const match = stepResult.value;
-						if (!match.success) {
-							return failure();
-						}
-						result.push(match.result);
-						remaining = match.remaining;
-						if (i == parsers.length - 1) {
-							return success((result as any), remaining);
-						}
-						yield;
-						break;
-					}
-					yield;
-				}
+		const result: any[] = [];
+		let remaining = input;
+		let i = 0;
+		let task = parsers[i](remaining);
+		return new ParserTask((success, failure) => {
+			let stepResult = task.step();
+			if (!stepResult.done) {
+				//console.log('[seq] pending');
+				return;
 			}
+			const match = stepResult.value;
+			if (!match.success) {
+				//console.log('[seq] failure');
+				return failure();
+			}
+			result.push(match.result);
+			remaining = match.remaining;
+			if (i == parsers.length - 1) {
+				//console.log('[seq] success');
+				return success((result as any), remaining);
+			}
+			i++;
+			task = parsers[i](remaining);
+			//console.log('[seq] next');
 		});
 	};
 }
