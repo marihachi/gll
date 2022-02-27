@@ -23,14 +23,37 @@ export type ParserFailure = () => void;
 export type ParserHandler<T> = (input: string) => ParserTask<T>;
 
 export class Parser<T> {
+	public id: string;
+	private static parserMemo: Record<string, Parser<any>> = {};
+	private memo: Record<string, ParserTask<T>> = {};
 	private handler: ParserHandler<T>;
 
-	constructor(handler: ParserHandler<T>) {
+	constructor(id: string, handler: ParserHandler<T>) {
+		this.id = id;
 		this.handler = handler;
 	}
 
+	public static create<T>(id: string, handler: ParserHandler<T>): Parser<T> {
+		let parser = Parser.parserMemo[id];
+		if (parser != null) {
+			//console.log('hit parser:', id);
+			return parser;
+		}
+		//console.log('memo parser:', id);
+		parser = new Parser(id, handler);
+		Parser.parserMemo[id] = parser;
+		return parser;
+	}
+
 	public parse(input: string): ParserTask<T> {
-		return this.handler(input);
+		let task = this.memo[input];
+		if (task != null) {
+			//console.log('hit input');
+			return task;
+		}
+		task = this.handler(input);
+		this.memo[input] = task;
+		return task;
 	}
 }
 
@@ -77,7 +100,7 @@ export type InferParserResults<T> = T extends [infer U, ...infer V] ? [InferPars
 // parsers
 
 export function str(value: string): Parser<string> {
-	return new Parser((input) => {
+	return Parser.create(`str{${value}}`, (input) => {
 		return new ParserTask((success, failure) => {
 			if (input.startsWith(value)) {
 				const remaining = input.substr(value.length);
@@ -89,7 +112,7 @@ export function str(value: string): Parser<string> {
 }
 
 export function regex(pattern: RegExp): Parser<RegExpExecArray> {
-	return new Parser((input) => {
+	return Parser.create(`reg{${pattern.source}}`, (input) => {
 		return new ParserTask((success, failure) => {
 			const match = pattern.exec(input);
 			if (match == null) {
@@ -103,7 +126,7 @@ export function regex(pattern: RegExp): Parser<RegExpExecArray> {
 
 // NOTE: Tの制約が思いつくまでは`Parser<any>`
 export function choice<T extends Parser<any>>(parsers: T[]): Parser<InferParserResult<T>> {
-	return new Parser((input) => {
+	return Parser.create(`alt{${parsers.map(i => i.id).join(',')}}`, (input) => {
 		const tasks: ParserTask<InferParserResult<T>>[] = [];
 		for (const parser of parsers) {
 			tasks.push(parser.parse(input));
@@ -130,7 +153,7 @@ export function choice<T extends Parser<any>>(parsers: T[]): Parser<InferParserR
 // NOTE: Tの制約が思いつくまでは`Parser<any>[]`
 // NOTE: resultの型が思いつくまでは`any`
 export function sequence<T extends Parser<any>[]>(parsers: [...T]): Parser<InferParserResults<T>> {
-	return new Parser((input) => {
+	return Parser.create(`seq{${parsers.map(i => i.id).join(',')}}`, (input) => {
 		const result: any[] = [];
 		let remaining = input;
 		let i = 0;
