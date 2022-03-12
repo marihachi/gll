@@ -130,15 +130,17 @@ export const choice = combinator('choice', (parsers: Parser[]) => {
 		}
 		return (success, failure) => {
 			for(const task of tasks) {
-				if (task.step()) {
+				task.step();
+			}
+
+			if (tasks.every(t => t.done)) {
+				for (const task of tasks) {
 					const match = task.result!;
 					if (match.success) {
 						//console.log('[choice] success');
 						return success(match.result, match.remaining);
 					}
 				}
-			}
-			if (tasks.every(t => t.done)) {
 				//console.log('[choice] failure');
 				return failure();
 			}
@@ -180,6 +182,9 @@ function app() {
 	const parser = choice([
 		sequence([str('abc'), str('xyz')]),
 		sequence([str('abc'), str('123')]),
+		str('abc'),
+		str('123'),
+		str('xyz'),
 	]);
 
 	let input = 'abc123abcxyzabc';
