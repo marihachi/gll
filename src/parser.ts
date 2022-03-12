@@ -193,3 +193,32 @@ export function sequence<T extends Parser<any>[]>(parsers: [...T]): Parser<Infer
 		};
 	});
 }
+
+function app() {
+	const parser = choice([
+		sequence([str('abc'), str('xyz')]),
+		sequence([str('abc'), str('123')]),
+	]);
+
+	let input = 'abc123abcxyzabc';
+	while (true) {
+		console.log(`input: "${input}"`);
+		const task = parser.parse(input);
+
+		let done;
+		do {
+			console.log('step');
+			done = task.step();
+			if (done) {
+				console.log('<- done', task.result);
+			} else {
+				console.log('<- pending');
+			}
+		} while (!done);
+
+		const match = task.result!;
+		if (!match.success) break;
+		input = match.remaining;
+	}
+}
+app();
