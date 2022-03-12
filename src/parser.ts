@@ -20,7 +20,7 @@ export type ParserSuccess<T> = (result: T, remaining: string) => void;
 
 export type ParserFailure = () => void;
 
-export type ParserHandler<T> = (input: string) => ParserTask<T>;
+export type ParserHandler<T> = (input: string) => ParserTaskHandler<T>;
 
 export class Parser<T> {
 	public id: string;
@@ -51,9 +51,22 @@ export class Parser<T> {
 			//console.log('hit input');
 			return task;
 		}
-		task = this.handler(input);
+		task = new ParserTask(this.handler(input));
 		this.memo[input] = task;
 		return task;
+	}
+
+	public map<U>(fn: (p: T) => U) {
+		const id = `${this.id}map{${fn.toString()}}`;
+		return new Parser<U>(id, (input) => {
+			const taskHandler = this.handler(input);
+			return (success, failure) => {
+				const successInner = (result: T, remaining: string) => {
+					success(fn(result), remaining);
+				};
+				taskHandler(successInner, failure);
+			};
+		});
 	}
 }
 
@@ -101,26 +114,26 @@ export type InferParserResults<T> = T extends [infer U, ...infer V] ? [InferPars
 
 export function str(value: string): Parser<string> {
 	return Parser.create(`str{${value}}`, (input) => {
-		return new ParserTask((success, failure) => {
+		return (success, failure) => {
 			if (input.startsWith(value)) {
 				const remaining = input.substr(value.length);
 				return success(value, remaining);
 			}
 			return failure();
-		});
+		};
 	});
 }
 
 export function regex(pattern: RegExp): Parser<RegExpExecArray> {
 	return Parser.create(`reg{${pattern.source}}`, (input) => {
-		return new ParserTask((success, failure) => {
+		return (success, failure) => {
 			const match = pattern.exec(input);
 			if (match == null) {
 				return failure();
 			}
 			const remaining = input.substr(match[0].length);
 			return success(match, remaining);
-		});
+		};
 	});
 }
 
@@ -131,7 +144,7 @@ export function choice<T extends Parser<any>>(parsers: T[]): Parser<InferParserR
 		for (const parser of parsers) {
 			tasks.push(parser.parse(input));
 		}
-		return new ParserTask((success, failure) => {
+		return (success, failure) => {
 			for(const task of tasks) {
 				if (task.step()) {
 					const match = task.result!;
@@ -146,7 +159,7 @@ export function choice<T extends Parser<any>>(parsers: T[]): Parser<InferParserR
 				return failure();
 			}
 			//console.log('[choice] pending');
-		});
+		};
 	});
 }
 
@@ -158,7 +171,7 @@ export function sequence<T extends Parser<any>[]>(parsers: [...T]): Parser<Infer
 		let remaining = input;
 		let i = 0;
 		let task = parsers[i].parse(remaining);
-		return new ParserTask((success, failure) => {
+		return (success, failure) => {
 			if (!task.step()) {
 				//console.log('[seq] pending');
 				return;
@@ -177,6 +190,6 @@ export function sequence<T extends Parser<any>[]>(parsers: [...T]): Parser<Infer
 			i++;
 			task = parsers[i].parse(remaining);
 			//console.log('[seq] next');
-		});
+		};
 	});
 }
