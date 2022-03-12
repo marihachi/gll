@@ -47,9 +47,8 @@ export function combinator<T extends CombinatorHandler>(name: string, handler: T
 
 // parser
 
+export type Parser = (input: string) => ParserTask;
 export type ParserHandler = (input: string) => ParserTaskHandler;
-
-type Parser = (input: string) => ParserTask;
 
 export function createParser(name: string, handler: ParserHandler): Parser {
 	const memo: Map<string, ParserTask> = new Map();
@@ -69,13 +68,12 @@ export function createParser(name: string, handler: ParserHandler): Parser {
 
 // parser task
 
-type ParserTaskHandler = (success: TaskSuccess, failure: TaskFailure) => void;
-type TaskSuccess = (result: any, remaining: string) => void;
-type TaskFailure = () => void;
+export type ParserTaskHandler = (success: TaskSuccess, failure: TaskFailure) => void;
+export type TaskSuccess = (result: any, remaining: string) => void;
+export type TaskFailure = () => void;
 
-class ParserTask {
+export class ParserTask {
 	private handler: () => void;
-
 	private ok: boolean;
 	public result?: Result;
 
@@ -179,7 +177,6 @@ export const sequence = combinator('sequence', (parsers: Parser[]) => {
 });
 
 function app() {
-
 	const parser = choice([
 		sequence([str('abc'), str('xyz')]),
 		sequence([str('abc'), str('123')]),
@@ -188,7 +185,6 @@ function app() {
 	let input = 'abc123abcxyzabc';
 	while (true) {
 		console.log(`input: "${input}"`);
-
 		const task = parser(input);
 
 		let done;
