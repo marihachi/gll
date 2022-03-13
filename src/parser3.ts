@@ -22,15 +22,26 @@ export function memoize<T extends unknown[], U>(fn: (...args: T) => U): (...args
 	};
 }
 
-// result
+// combinator
 
-export type Success<T = any> = {
+export type Combinator<T extends unknown[], U = any> = (...args: T) => Parser<U>;
+
+// parser
+
+export type Parser<T = any> = (input: string) => ParserTask<T>;
+
+// parser task
+
+export type TaskSuccess = (result: any, remaining: string) => void;
+export type TaskFailure = () => void;
+
+type Success<T = any> = {
 	success: true;
 	result: T;
 	remaining: string;
 };
 
-export type Failure = {
+type Failure = {
 	success: false;
 };
 
@@ -38,31 +49,15 @@ const failure: Failure = {
 	success: false,
 };
 
-export type Result<T = any> = Success<T> | Failure;
-
-// combinator
-
-export type Combinator<T extends unknown[]> = (...args: T) => Parser;
-
-// parser
-
-export type Parser = (input: string) => ParserTask;
-
-// parser task
-
-export type ParserTaskHandler = (success: TaskSuccess, failure: TaskFailure) => void;
-export type TaskSuccess = (result: any, remaining: string) => void;
-export type TaskFailure = () => void;
-
-export class ParserTask {
+export class ParserTask<T = any> {
 	private handler: () => void;
-	private ok: boolean;
-	public result?: Result;
+	private resolved: boolean;
+	public result?: Success<T> | Failure;
 
-	constructor(handler: ParserTaskHandler) {
-		this.ok = false;
+	constructor(handler: (success: TaskSuccess, failure: TaskFailure) => void) {
+		this.resolved = false;
 		const successFn = (result: any, remaining: string) => {
-			this.ok = true;
+			this.resolved = true;
 			this.result = {
 				success: true,
 				result: result,
@@ -70,28 +65,28 @@ export class ParserTask {
 			};
 		};
 		const failureFn = () => {
-			this.ok = true;
+			this.resolved = true;
 			this.result = failure;
 		};
 		this.handler = () => { handler(successFn, failureFn); };
 	}
 
 	public get done(): boolean {
-		return this.ok;
+		return this.resolved;
 	}
 
-	public step(): boolean {
-		if (!this.ok) {
+	public step() {
+		if (!this.resolved) {
 			this.handler();
 		}
-		return this.ok;
+		return this.resolved;
 	}
 }
 
 // combinators
 
-export const str: Combinator<[value: string]> = memoize((value) => {
-	return memoize((input) => {
+export const str = memoize((value: string) => {
+	return memoize((input: string) => {
 		return new ParserTask((success, failure) => {
 			if (input.startsWith(value)) {
 				const remaining = input.substr(value.length);
@@ -104,8 +99,8 @@ export const str: Combinator<[value: string]> = memoize((value) => {
 	});
 });
 
-export const choice: Combinator<[parsers: Parser[]]> = memoize((parsers) => {
-	return memoize((input) => {
+export const choice = memoize((parsers: Parser[]) => {
+	return memoize((input: string) => {
 		const tasks: ParserTask[] = [];
 		for (const parser of parsers) {
 			tasks.push(parser(input));
@@ -131,8 +126,8 @@ export const choice: Combinator<[parsers: Parser[]]> = memoize((parsers) => {
 	});
 });
 
-export const sequence: Combinator<[parsers: Parser[]]> = memoize((parsers) => {
-	return memoize((input) => {
+export const sequence = memoize((parsers: Parser[]) => {
+	return memoize((input: string) => {
 		const result: any[] = [];
 		let remaining = input;
 		let i = 0;
