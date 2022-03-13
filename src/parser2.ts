@@ -1,12 +1,10 @@
 import deepEqual from 'deep-equal';
 
-type Args<T> = T extends (...x: infer U) => unknown ? U : never;
-
 // result
 
-export type Success = {
+export type Success<T = any> = {
 	success: true;
-	result: any;
+	result: T;
 	remaining: string;
 };
 
@@ -18,15 +16,16 @@ const failure: Failure = {
 	success: false,
 };
 
-export type Result = Success | Failure;
+export type Result<T = any> = Success<T> | Failure;
 
 // combinator
 
-export type CombinatorHandler = (...x: any[]) => ParserHandler;
+export type Combinator<T extends unknown[]> = (...args: T) => Parser;
+export type CombinatorHandler<T extends unknown[]> = (...args: T) => ParserHandler;
 
-export function combinator<T extends CombinatorHandler>(name: string, handler: T): (...args: Args<T>) => Parser {
-	const memo: { args: any[], parser: Parser }[] = [];
-	return (...args: any[]) => {
+export function combinator<T extends unknown[]>(name: string, handler: CombinatorHandler<T>): Combinator<T> {
+	const memo: { args: T, parser: Parser }[] = [];
+	return (...args: T) => {
 		let record = memo.find(item => {
 			if (item.args.length != args.length) return false;
 			return deepEqual(item.args, args);
@@ -40,7 +39,6 @@ export function combinator<T extends CombinatorHandler>(name: string, handler: T
 		} else {
 			//console.log('hit parser:', name, args);
 		}
-
 		return record.parser;
 	};
 }
